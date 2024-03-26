@@ -94,7 +94,7 @@ def handle_message(event):
             reply_message = prize_messages[result]
         else:
             reply_message = "抱歉，您沒有中獎。"
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"您輸入的發票號碼為：{user_input}/n {reply_message}"))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"您輸入的發票號碼為：{user_input}\n {reply_message}"))
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請輸入 8 位數的發票號碼。"))
 
