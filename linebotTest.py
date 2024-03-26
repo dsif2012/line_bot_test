@@ -35,34 +35,35 @@ def check_invoice(invoice_number):
             description = item.find('description').text
             special_prize = description.split('<p>特別獎：')[1].split('</p>')[0]
             grand_prize = description.split('<p>特獎：')[1].split('</p>')[0]
-            first_prize = [x.split('</p>')[0] for x in description.split('<p>頭獎：')[1:]][0]
+            first_prizes_str = [x.split('</p>')[0] for x in description.split('<p>頭獎：')[1:]]  # 取得所有頭獎的字串列表
+
+            # 將每個頭獎字串進一步分割為單獨的頭獎號碼
+            first_prizes = []
+            for prize_str in first_prizes_str:
+                first_prizes.extend(prize_str.split('、'))  # 將多個頭獎號碼加入到列表中
             # 檢查是否中獎
             if invoice_number == special_prize:
-                return "特別獎"
+                answer= "特別獎"
             elif invoice_number == grand_prize:
-                return "特獎"
-            elif invoice_number == first_prize:
-                return "頭獎"
+                answer= "特獎"
             else:
-                last_three_digits = invoice_number[-3:]
-                if last_three_digits == special_prize[-3:]:
-                    return "六獎"
-                elif last_three_digits == grand_prize[-3:]:
-                    return "六獎"
-                elif last_three_digits in [x[-3:] for x in description.split('<p>頭獎：')[1:]]:
-                    return "六獎"
-                elif last_three_digits in [x[-3:] for x in description.split('<p>二獎：')[1:]]:
-                    return "五獎"
-                elif last_three_digits in [x[-3:] for x in description.split('<p>三獎：')[1:]]:
-                    return "四獎"
-                elif last_three_digits in [x[-3:] for x in description.split('<p>四獎：')[1:]]:
-                    return "三獎"
-                elif last_three_digits in [x[-3:] for x in description.split('<p>五獎：')[1:]]:
-                    return "二獎"
-                elif last_three_digits in [x[-3:] for x in description.split('<p>六獎：')[1:]]:
-                    return "一獎"
-                else:
-                    return "沒中獎"
+                for i in first_prizes:
+                    if invoice_number == i:
+                        answer= "頭獎"
+                    elif invoice_number[-7:]==i[-7:]:
+                        answer= "二獎"
+                    elif invoice_number[-6:]==i[-6:]:
+                        answer= "三獎"
+                    elif invoice_number[-5:]==i[-5:]:
+                        answer= "四獎"
+                    elif invoice_number[-4:]==i[-4:]:
+                        answer= "五獎"
+                    elif invoice_number[-3:]==i[-3:]:
+                        answer= "六獎"
+            try:
+                return answer
+            except:
+                return "可惜，您沒有沒中獎"
         else:
             return "Error fetching the XML data."
     except requests.exceptions.Timeout:
@@ -93,7 +94,7 @@ def handle_message(event):
         if result in prize_messages:
             reply_message = prize_messages[result]
         else:
-            reply_message = "抱歉，您沒有中獎。"
+            reply_message = result
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"您輸入的發票號碼為：{user_input}\n {reply_message}"))
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請輸入 8 位數的發票號碼。"))
