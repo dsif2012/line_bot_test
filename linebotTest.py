@@ -8,7 +8,7 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
 app = Flask(__name__)
 
-line_bot_api = LineBotApi('qejvWAVTU83QlMnSBKY786eFQMUfXycNQ9stoykXmtl96bXB9dUc0r5sAxWN01C2oY2b84nuE51NcnBJA++lnOT6SNt7wdhIVfKfLu+mFckrwY6qqiO8Ykdrs8i527Ju/VkXSNurBv8f3LPJqNdEfAdB04t89/1O/w1cDnyilFU=')
+line_bot_api = LineBotApi('elXhK9mReraLH+vbGiKZEu6rK299ZSts/29WWgv8RzlHeK+6jkP1nv1rIsPkendKoY2b84nuE51NcnBJA++lnOT6SNt7wdhIVfKfLu+mFclSi3zaAKc0mpCVdRGdlBq/M3FJX0qAPA/jH3FELHKTqwdB04t89/1O/w1cDnyilFU=')
 handler = WebhookHandler('c77ee99d1b99455f6f94ba1dcc7283a4')
 
 # 定義中獎訊息
