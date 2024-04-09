@@ -5,11 +5,15 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
+import sqlite3
 
 app = Flask(__name__)
 
 line_bot_api = LineBotApi('elXhK9mReraLH+vbGiKZEu6rK299ZSts/29WWgv8RzlHeK+6jkP1nv1rIsPkendKoY2b84nuE51NcnBJA++lnOT6SNt7wdhIVfKfLu+mFclSi3zaAKc0mpCVdRGdlBq/M3FJX0qAPA/jH3FELHKTqwdB04t89/1O/w1cDnyilFU=')
 handler = WebhookHandler('c77ee99d1b99455f6f94ba1dcc7283a4')
+
+# SQLite 數據庫文件路徑
+DB_FILE_PATH = 'invoice_data.db'
 
 # 定義中獎訊息
 prize_messages = {
@@ -23,53 +27,84 @@ prize_messages = {
     "六獎": "恭喜！您中了六獎，獎金新臺幣二百元。"
 }
 
+# 初始化 SQLite 數據庫
+def initialize_database():
+    if not os.path.exists(DB_FILE_PATH):
+        conn = sqlite3.connect(DB_FILE_PATH)
+        c = conn.cursor()
+        # 建立資料表
+        c.execute('''CREATE TABLE IF NOT EXISTS invoices
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      special_prize TEXT UNIQUE,
+                      grand_prize TEXT,
+                      big_prize1 TEXT,
+                      big_prize2 TEXT,
+                      big_prize3 TEXT)''')
+        conn.commit()
+        conn.close()
+
+# 檢查並更新數據庫
+def check_and_update_database():
+    conn = sqlite3.connect(DB_FILE_PATH)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM invoices")
+    count = c.fetchone()[0]
+    if count == 0:
+        url = 'https://invoice.etax.nat.gov.tw/invoice.xml'
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                tree = ET.fromstring(response.text)
+                item = tree.find('.//item')
+                description = item.find('description').text
+                special_prize = description.split('<p>特別獎：')[1].split('</p>')[0]
+                grand_prize = description.split('<p>特獎：')[1].split('</p>')[0]
+                first_prizes_str = [x.split('</p>')[0] for x in description.split('<p>頭獎：')[1:]]  # 取得所有頭獎的字串列表
+                
+                # 將每個頭獎字串進一步分割為單獨的頭獎號碼
+                first_prizes = []
+                for prize_str in first_prizes_str:
+                    first_prizes.extend(prize_str.split('、'))  # 將多個頭獎號碼加入到列表中
+                    
+                # 將數據插入到數據庫中
+                c.execute("INSERT INTO invoices (special_prize, grand_prize, big_prize1, big_prize2, big_prize3) VALUES (?, ?, ?, ?, ?)", (special_prize, grand_prize, first_prizes[0], first_prizes[1], first_prizes[2]))
+                conn.commit()
+        except requests.exceptions.Timeout:
+            return "Connection timed out."
+        except requests.exceptions.ConnectionError:
+            return "Connection error occurred."
+    conn.close()
+
 # 解析中獎號碼的函數
 def check_invoice(invoice_number):
-    # 從網址取得 XML 資料
-    url = 'https://invoice.etax.nat.gov.tw/invoice.xml'
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            tree = ET.fromstring(response.text)
-            item = tree.find('.//item')
-            description = item.find('description').text
-            special_prize = description.split('<p>特別獎：')[1].split('</p>')[0]
-            grand_prize = description.split('<p>特獎：')[1].split('</p>')[0]
-            first_prizes_str = [x.split('</p>')[0] for x in description.split('<p>頭獎：')[1:]]  # 取得所有頭獎的字串列表
-
-            # 將每個頭獎字串進一步分割為單獨的頭獎號碼
-            first_prizes = []
-            for prize_str in first_prizes_str:
-                first_prizes.extend(prize_str.split('、'))  # 將多個頭獎號碼加入到列表中
-            # 檢查是否中獎
-            if invoice_number == special_prize:
-                answer= "特別獎"
-            elif invoice_number == grand_prize:
-                answer= "特獎"
-            else:
-                for i in first_prizes:
-                    if invoice_number == i:
-                        answer= "頭獎"
-                    elif invoice_number[-7:]==i[-7:]:
-                        answer= "二獎"
-                    elif invoice_number[-6:]==i[-6:]:
-                        answer= "三獎"
-                    elif invoice_number[-5:]==i[-5:]:
-                        answer= "四獎"
-                    elif invoice_number[-4:]==i[-4:]:
-                        answer= "五獎"
-                    elif invoice_number[-3:]==i[-3:]:
-                        answer= "六獎"
-            try:
-                return answer
-            except:
-                return "可惜，您沒有沒中獎"
+    conn = sqlite3.connect(DB_FILE_PATH)
+    c = conn.cursor()
+    c.execute("SELECT * FROM invoices")
+    data = c.fetchone()
+    if data is not None:
+        special_prize, grand_prize, big_prize1, big_prize2, big_prize3 = data
+        if invoice_number == special_prize:
+            answer = "特別獎"
+        elif invoice_number == grand_prize:
+            answer = "特獎"
+        elif invoice_number == big_prize1 or invoice_number == big_prize2 or invoice_number == big_prize3:
+            answer = "頭獎"
+        elif invoice_number[-7:] == big_prize1[-7:] or invoice_number[-7:] == big_prize2[-7:] or invoice_number[-7:] == big_prize3[-7:]:
+            answer = "二獎"
+        elif invoice_number[-6:] == big_prize1[-6:] or invoice_number[-6:] == big_prize2[-6:] or invoice_number[-6:] == big_prize3[-6:]:
+            answer = "三獎"
+        elif invoice_number[-5:] == big_prize1[-5:] or invoice_number[-5:] == big_prize2[-5:] or invoice_number[-5:] == big_prize3[-5:]:
+            answer = "四獎"
+        elif invoice_number[-4:] == big_prize1[-4:] or invoice_number[-4:] == big_prize2[-4:] or invoice_number[-4:] == big_prize3[-4:]:
+            answer = "五獎"
+        elif invoice_number[-3:] == big_prize1[-3:] or invoice_number[-3:] == big_prize2[-3:] or invoice_number[-3:] == big_prize3[-3:]:
+            answer = "六獎"
         else:
-            return "Error fetching the XML data."
-    except requests.exceptions.Timeout:
-        return "Connection timed out."
-    except requests.exceptions.ConnectionError:
-        return "Connection error occurred."
+            answer = "可惜，您沒有中獎"
+    else:
+        answer = "資料庫中無資料，請稍後再試"
+    conn.close()
+    return answer
 
 # Line Bot 的 Webhook 處理
 @app.route("/callback", methods=['POST'])
@@ -100,4 +135,8 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請輸入 8 位數的發票號碼。"))
 
 if __name__ == '__main__':
+    # 初始化數據庫
+    initialize_database()
+    # 檢查並更新數據庫
+    check_and_update_database()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
