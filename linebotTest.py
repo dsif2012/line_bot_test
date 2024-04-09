@@ -28,52 +28,52 @@ prize_messages = {
 }
 
 # 初始化 SQLite 數據庫
-def initialize_database():
-    if not os.path.exists(DB_FILE_PATH):
-        conn = sqlite3.connect(DB_FILE_PATH)
-        c = conn.cursor()
-        # 建立資料表
-        c.execute('''CREATE TABLE IF NOT EXISTS invoices
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                      special_prize TEXT UNIQUE,
-                      grand_prize TEXT,
-                      big_prize1 TEXT,
-                      big_prize2 TEXT,
-                      big_prize3 TEXT)''')
-        conn.commit()
-        conn.close()
-
-# 檢查並更新數據庫
-def check_and_update_database():
+if not os.path.exists(DB_FILE_PATH):
     conn = sqlite3.connect(DB_FILE_PATH)
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM invoices")
-    count = c.fetchone()[0]
-    if count == 0:
-        url = 'https://invoice.etax.nat.gov.tw/invoice.xml'
-        try:
-            response = requests.get(url, timeout=10)
-            if response.status_code == 200:
-                tree = ET.fromstring(response.text)
-                item = tree.find('.//item')
-                description = item.find('description').text
-                special_prize = description.split('<p>特別獎：')[1].split('</p>')[0]
-                grand_prize = description.split('<p>特獎：')[1].split('</p>')[0]
-                first_prizes_str = [x.split('</p>')[0] for x in description.split('<p>頭獎：')[1:]]  # 取得所有頭獎的字串列表
-                
-                # 將每個頭獎字串進一步分割為單獨的頭獎號碼
-                first_prizes = []
-                for prize_str in first_prizes_str:
-                    first_prizes.extend(prize_str.split('、'))  # 將多個頭獎號碼加入到列表中
-                    
-                # 將數據插入到數據庫中
-                c.execute("INSERT INTO invoices (special_prize, grand_prize, big_prize1, big_prize2, big_prize3) VALUES (?, ?, ?, ?, ?)", (special_prize, grand_prize, first_prizes[0], first_prizes[1], first_prizes[2]))
-                conn.commit()
-        except requests.exceptions.Timeout:
-            return "Connection timed out."
-        except requests.exceptions.ConnectionError:
-            return "Connection error occurred."
+    # 建立資料表
+    c.execute('''CREATE TABLE IF NOT EXISTS invoices
+                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    special_prize TEXT UNIQUE,
+                    grand_prize TEXT,
+                    big_prize1 TEXT,
+                    big_prize2 TEXT,
+                    big_prize3 TEXT)''')
+    conn.commit()
     conn.close()
+
+# 檢查並更新數據庫
+conn = sqlite3.connect(DB_FILE_PATH)
+c = conn.cursor()
+c.execute("SELECT COUNT(*) FROM invoices")
+count = c.fetchone()[0]
+if count == 0:
+    url = 'https://invoice.etax.nat.gov.tw/invoice.xml'
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            tree = ET.fromstring(response.text)
+            item = tree.find('.//item')
+            description = item.find('description').text
+            special_prize = description.split('<p>特別獎：')[1].split('</p>')[0]
+            grand_prize = description.split('<p>特獎：')[1].split('</p>')[0]
+            first_prizes_str = [x.split('</p>')[0] for x in description.split('<p>頭獎：')[1:]]  # 取得所有頭獎的字串列表
+            
+            # 將每個頭獎字串進一步分割為單獨的頭獎號碼
+            first_prizes = []
+            for prize_str in first_prizes_str:
+                first_prizes.extend(prize_str.split('、'))  # 將多個頭獎號碼加入到列表中
+                
+            # 將數據插入到數據庫中
+            c.execute("INSERT INTO invoices (special_prize, grand_prize, big_prize1, big_prize2, big_prize3) VALUES (?, ?, ?, ?, ?)", (special_prize, grand_prize, first_prizes[0], first_prizes[1], first_prizes[2]))
+            conn.commit()
+    except requests.exceptions.Timeout:
+        # pass "Connection timed out."
+        pass
+    except requests.exceptions.ConnectionError:
+        # return "Connection error occurred."
+        pass
+conn.close()
 
 # 解析中獎號碼的函數
 def check_invoice(invoice_number):
@@ -135,8 +135,4 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="請輸入 8 位數的發票號碼。"))
 
 if __name__ == '__main__':
-    # 初始化數據庫
-    initialize_database()
-    # 檢查並更新數據庫
-    check_and_update_database()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
