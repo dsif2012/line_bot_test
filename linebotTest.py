@@ -82,7 +82,7 @@ def check_invoice(invoice_number):
     c.execute("SELECT * FROM invoices")
     data = c.fetchone()
     if data is not None:
-        special_prize, grand_prize, big_prize1, big_prize2, big_prize3 = data
+        _,special_prize, grand_prize, big_prize1, big_prize2, big_prize3 = data
         if invoice_number == special_prize:
             answer = "特別獎"
         elif invoice_number == grand_prize:
