@@ -6,105 +6,24 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 import sqlite3
+from invoice_checker import check_invoice
 
 app = Flask(__name__)
 
 line_bot_api = LineBotApi('elXhK9mReraLH+vbGiKZEu6rK299ZSts/29WWgv8RzlHeK+6jkP1nv1rIsPkendKoY2b84nuE51NcnBJA++lnOT6SNt7wdhIVfKfLu+mFclSi3zaAKc0mpCVdRGdlBq/M3FJX0qAPA/jH3FELHKTqwdB04t89/1O/w1cDnyilFU=')
 handler = WebhookHandler('c77ee99d1b99455f6f94ba1dcc7283a4')
 
-# SQLite 數據庫文件路徑
-DB_FILE_PATH = 'invoice_data.db'
+@app.route('/check', methods=['POST'])
+def check():
+    data = request.json
+    if 'invoice_number' not in data:
+        return jsonify({'error': '請提供 invoice_number'}), 400
 
-# 定義中獎訊息
-prize_messages = {
-    "特別獎": "恭喜！您中了特別獎，獎金新臺幣一千萬元。",
-    "特獎": "恭喜！您中了特獎，獎金新臺幣二百萬元。",
-    "頭獎": "恭喜！您中了頭獎，獎金新臺幣二十萬元。",
-    "二獎": "恭喜！您中了二獎，獎金新臺幣四萬元。",
-    "三獎": "恭喜！您中了三獎，獎金新臺幣一萬元。",
-    "四獎": "恭喜！您中了四獎，獎金新臺幣四千元。",
-    "五獎": "恭喜！您中了五獎，獎金新臺幣一千元。",
-    "六獎": "恭喜！您中了六獎，獎金新臺幣二百元。"
-}
+    invoice_number = data['invoice_number']
+    result = check_invoice(invoice_number)
+    return jsonify({'result': result})
 
-# 初始化 SQLite 數據庫
-if not os.path.exists(DB_FILE_PATH):
-    conn = sqlite3.connect(DB_FILE_PATH)
-    c = conn.cursor()
-    # 建立資料表
-    c.execute('''CREATE TABLE IF NOT EXISTS invoices
-                    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    special_prize TEXT UNIQUE,
-                    grand_prize TEXT,
-                    big_prize1 TEXT,
-                    big_prize2 TEXT,
-                    big_prize3 TEXT)''')
-    conn.commit()
-    conn.close()
 
-# 檢查並更新數據庫
-conn = sqlite3.connect(DB_FILE_PATH)
-c = conn.cursor()
-c.execute("SELECT COUNT(*) FROM invoices")
-count = c.fetchone()[0]
-if count == 0:
-    url = 'https://invoice.etax.nat.gov.tw/invoice.xml'
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            tree = ET.fromstring(response.text)
-            item = tree.find('.//item')
-            description = item.find('description').text
-            special_prize = description.split('<p>特別獎：')[1].split('</p>')[0]
-            grand_prize = description.split('<p>特獎：')[1].split('</p>')[0]
-            first_prizes_str = [x.split('</p>')[0] for x in description.split('<p>頭獎：')[1:]]  # 取得所有頭獎的字串列表
-            
-            # 將每個頭獎字串進一步分割為單獨的頭獎號碼
-            first_prizes = []
-            for prize_str in first_prizes_str:
-                first_prizes.extend(prize_str.split('、'))  # 將多個頭獎號碼加入到列表中
-                
-            # 將數據插入到數據庫中
-            c.execute("INSERT INTO invoices (special_prize, grand_prize, big_prize1, big_prize2, big_prize3) VALUES (?, ?, ?, ?, ?)", (special_prize, grand_prize, first_prizes[0], first_prizes[1], first_prizes[2]))
-            conn.commit()
-    except requests.exceptions.Timeout:
-        # pass "Connection timed out."
-        pass
-    except requests.exceptions.ConnectionError:
-        # return "Connection error occurred."
-        pass
-conn.close()
-
-# 解析中獎號碼的函數
-def check_invoice(invoice_number):
-    conn = sqlite3.connect(DB_FILE_PATH)
-    c = conn.cursor()
-    c.execute("SELECT * FROM invoices")
-    data = c.fetchone()
-    if data is not None:
-        _,special_prize, grand_prize, big_prize1, big_prize2, big_prize3 = data
-        if invoice_number == special_prize:
-            answer = "特別獎"
-        elif invoice_number == grand_prize:
-            answer = "特獎"
-        elif invoice_number == big_prize1 or invoice_number == big_prize2 or invoice_number == big_prize3:
-            answer = "頭獎"
-        elif invoice_number[-7:] == big_prize1[-7:] or invoice_number[-7:] == big_prize2[-7:] or invoice_number[-7:] == big_prize3[-7:]:
-            answer = "二獎"
-        elif invoice_number[-6:] == big_prize1[-6:] or invoice_number[-6:] == big_prize2[-6:] or invoice_number[-6:] == big_prize3[-6:]:
-            answer = "三獎"
-        elif invoice_number[-5:] == big_prize1[-5:] or invoice_number[-5:] == big_prize2[-5:] or invoice_number[-5:] == big_prize3[-5:]:
-            answer = "四獎"
-        elif invoice_number[-4:] == big_prize1[-4:] or invoice_number[-4:] == big_prize2[-4:] or invoice_number[-4:] == big_prize3[-4:]:
-            answer = "五獎"
-        elif invoice_number[-3:] == big_prize1[-3:] or invoice_number[-3:] == big_prize2[-3:] or invoice_number[-3:] == big_prize3[-3:]:
-            answer = "六獎"
-        else:
-            answer = "可惜，您沒有中獎"
-    else:
-        answer = "資料庫中無資料，請稍後再試"
-    conn.close()
-    return answer
 
 # Line Bot 的 Webhook 處理
 @app.route("/callback", methods=['POST'])
